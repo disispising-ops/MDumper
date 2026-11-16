@@ -14,18 +14,6 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
-
-        ndk {
-            abiFilters += "arm64-v8a"   // 64-bit only, same as PUBG itself
-        }
-
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++17"
-                arguments += "-DANDROID_STL=c++_static"
-                arguments += "-DDUMPER_BUILD_LIBRARY=ON"
-            }
-        }
     }
 
     buildTypes {
@@ -44,13 +32,6 @@ android {
     kotlinOptions { jvmTarget = "17" }
 
     buildFeatures { viewBinding = true }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
