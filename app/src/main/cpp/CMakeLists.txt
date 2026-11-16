@@ -35,11 +35,12 @@ target_include_directories(mdumper_full PRIVATE "${KITTYMEM_PATH}/..")
 target_compile_definitions(mdumper_full PRIVATE
     FMT_HEADER_ONLY kNO_KEYSTONE DUMPER_BUILD_EXECUTABLE NDEBUG)
 target_compile_options(mdumper_full PRIVATE
+    -stdlib=libc++
     "SHELL:$<$<COMPILE_LANGUAGE:CXX>:-include ${FORCE_INC}>"
     -fexceptions -fPIE
     -Wno-unused-parameter -Wno-unused-function -Wno-missing-field-initializers
     -O2 -fvisibility=hidden -fvisibility-inlines-hidden)
-target_link_options(mdumper_full PRIVATE -fPIE -pie -s)
+target_link_options(mdumper_full PRIVATE -fPIE -pie -s -static-libstdc++ -Wl,--exclude-libs,ALL)
 target_link_libraries(mdumper_full PRIVATE log)
 set_target_properties(mdumper_full PROPERTIES
     OUTPUT_NAME "mdumper_full" PREFIX "lib" SUFFIX ".so")
