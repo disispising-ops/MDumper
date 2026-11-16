@@ -11,20 +11,30 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        with: { submodules: recursive }
 
-      - name: Fetch MobileDumper-7 and apply patches
+      - name: Fetch MobileDumper-7 fresh
         run: |
           set -e
           MD7_DIR=app/src/main/cpp/MobileDumper-7
-          if [ ! -f $MD7_DIR/CMakeLists.txt ]; then
-            git clone --recursive https://github.com/MJx0/MobileDumper-7.git $MD7_DIR
+          rm -rf $MD7_DIR
+          git clone --recursive --depth 1 https://github.com/MJx0/MobileDumper-7.git $MD7_DIR
+          echo "MD7 files: $(find $MD7_DIR/Dumper -type f | wc -l)"
+          if [ ! -f $MD7_DIR/libs/KittyMemoryEx/KittyMemoryEx/KittyMemoryMgr.cpp ]; then
+            echo "Populating KittyMemoryEx manually"
+            rm -rf $MD7_DIR/libs/KittyMemoryEx
+            git clone --depth 1 https://github.com/MJ-x/KittyMemoryEx.git $MD7_DIR/libs/KittyMemoryEx || \
+            git clone --depth 1 https://github.com/MJx0/KittyMemoryEx.git $MD7_DIR/libs/KittyMemoryEx
           fi
-          cd $MD7_DIR
-          for p in ../../../../patches/*.patch; do
+          ls $MD7_DIR/libs/KittyMemoryEx/KittyMemoryEx/*.cpp | head -5
+
+      - name: Apply patches
+        run: |
+          set -e
+          cd app/src/main/cpp/MobileDumper-7
+          for p in ../../../../../patches/*.patch; do
             if [ -f "$p" ]; then
               echo "Applying $p"
-              git apply --verbose "$p" || { echo "Patch failed: $p"; exit 1; }
+              git apply --verbose "$p" || { echo "Patch failed: $p"; cat "$p"; exit 1; }
             fi
           done
 
@@ -47,9 +57,3 @@ jobs:
           name: MDumper-APK
           path: app/build/outputs/apk/release/*.apk
           retention-days: 30
-
-      - name: Dump failure logs
-        if: failure()
-        run: |
-          find app/build -name "*.log" -exec echo "=== {} ===" \; -exec cat {} \; || true
-          find . -name "CMakeOutput.log" -o -name "CMakeError.log" | head -5 | xargs -r cat || true
