@@ -11,15 +11,16 @@ if(NOT EXISTS "${MD7_DIR}/CMakeLists.txt")
 endif()
 set(DUMPER_ROOT "${MD7_DIR}" CACHE PATH "MD7 root" FORCE)
 
-# Build MD7 as library (keeps the JNI dumpFull for app-UID testing)
-add_subdirectory("${MD7_DIR}" MobileDumper-7)
+# Force-include header path
+set(FORCE_INC "${CMAKE_CURRENT_SOURCE_DIR}/md7_force_includes.h")
 
-# ─── MD7 as a standalone executable ───────────────────────────────────
-# Glob the same files MD7 uses, enable DUMPER_BUILD_EXECUTABLE so its main
-# function is active. This binary runs via `su -c` from the app.
+add_subdirectory("${MD7_DIR}" MobileDumper-7)
+# Add the pre-include to MD7 target so library build gets it too
+target_compile_options(MobileDumper-7 PRIVATE -include "${FORCE_INC}")
+
+# ─── MD7 as standalone executable ──────────────────────────────────
 set(KITTYMEM_PATH "${MD7_DIR}/libs/KittyMemoryEx/KittyMemoryEx")
 file(GLOB KITTYMEM_SRC "${KITTYMEM_PATH}/*.cpp")
-
 file(GLOB_RECURSE MD7_SRC
     "${MD7_DIR}/Dumper/*.cpp"
     "${MD7_DIR}/Dumper/*.c"
@@ -34,6 +35,7 @@ target_include_directories(mdumper_full PRIVATE "${KITTYMEM_PATH}/..")
 target_compile_definitions(mdumper_full PRIVATE
     FMT_HEADER_ONLY kNO_KEYSTONE DUMPER_BUILD_EXECUTABLE NDEBUG)
 target_compile_options(mdumper_full PRIVATE
+    -include "${FORCE_INC}"
     -fexceptions -fPIE
     -Wno-unused-parameter -Wno-unused-function -Wno-missing-field-initializers
     -O2 -fvisibility=hidden -fvisibility-inlines-hidden)
@@ -46,7 +48,7 @@ set_target_properties(mdumper_full PROPERTIES
 add_library(mdumper_stub SHARED jni_stub.cpp pubg_walker.cpp)
 target_link_libraries(mdumper_stub PRIVATE log android)
 
-# Quick walker binary (static libc++ so no runtime linker complaints)
+# Quick walker (static libc++)
 add_executable(mdumper_exec exec_main.cpp pubg_walker.cpp)
 target_link_libraries(mdumper_exec PRIVATE log)
 set_target_properties(mdumper_exec PROPERTIES
