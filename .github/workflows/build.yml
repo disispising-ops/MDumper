@@ -1,10 +1,8 @@
 name: Build MDumper APK
-
 on:
   push:
     branches: [main, master]
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,21 +18,26 @@ jobs:
           git clone --recursive --depth 1 https://github.com/MJx0/MobileDumper-7.git $MD7_DIR
           echo "MD7 files: $(find $MD7_DIR/Dumper -type f | wc -l)"
           if [ ! -f $MD7_DIR/libs/KittyMemoryEx/KittyMemoryEx/KittyMemoryMgr.cpp ]; then
-            echo "Populating KittyMemoryEx manually"
             rm -rf $MD7_DIR/libs/KittyMemoryEx
-            git clone --depth 1 https://github.com/MJ-x/KittyMemoryEx.git $MD7_DIR/libs/KittyMemoryEx || \
             git clone --depth 1 https://github.com/MJx0/KittyMemoryEx.git $MD7_DIR/libs/KittyMemoryEx
           fi
-          ls $MD7_DIR/libs/KittyMemoryEx/KittyMemoryEx/*.cpp | head -5
 
       - name: Apply patches
         run: |
           set -e
           cd app/src/main/cpp/MobileDumper-7
+          # .patch files via git apply
           for p in ../../../../../patches/*.patch; do
             if [ -f "$p" ]; then
-              echo "Applying $p"
-              git apply --verbose "$p" || { echo "Patch failed: $p"; cat "$p"; exit 1; }
+              echo "patch: $p"
+              git apply --verbose "$p" || { echo "FAILED: $p"; exit 1; }
+            fi
+          done
+          # .sh scripts for things git apply can't do cleanly
+          for s in ../../../../../patches/*.sh; do
+            if [ -f "$s" ]; then
+              echo "script: $s"
+              bash "$s"
             fi
           done
 
