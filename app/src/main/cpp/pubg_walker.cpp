@@ -123,6 +123,8 @@ static uintptr_t find_world(const ProcMem& mem, uintptr_t gObjAddr,
                              uintptr_t chunkTable, uintptr_t libBase) {
     uintptr_t objectsArr = mem.R<uintptr_t>(gObjAddr + OFF::FFOA_Objects);
     int32_t numObjects = mem.R<int32_t>(gObjAddr + OFF::FFOA_NumObj);
+    // Looser check: any object with a Levels TArray pointing to a ULevel that
+    // has Actors.Num > 100 and a NetDriver pointer in its own body.
     for (int32_t i = 0; i < numObjects; ++i) {
         uintptr_t obj = mem.R<uintptr_t>(objectsArr + (uintptr_t)i * OFF::FUOI_Size);
         if (!is_heap_ptr(obj)) continue;
@@ -131,23 +133,18 @@ static uintptr_t find_world(const ProcMem& mem, uintptr_t gObjAddr,
         if (!is_heap_ptr(h.Data)) continue;
         uintptr_t lvl0 = mem.R<uintptr_t>(h.Data);
         if (!is_heap_ptr(lvl0)) continue;
-        std::string lvlClass = obj_class_name(mem, lvl0, chunkTable);
-        if (lvlClass.find("Level") == std::string::npos) continue;
+        // Level vtable in exec range
+        uintptr_t lvlVtbl = mem.R<uintptr_t>(lvl0);
+        if (lvlVtbl < libBase || lvlVtbl > libBase + 0x20000000) continue;
         TArrayHeader a = mem.R<TArrayHeader>(lvl0 + OFF::Level_Actors);
         if (a.Num < 100 || a.Num > 500000) continue;
         if (!is_heap_ptr(a.Data)) continue;
-        int hits = 0;
-        for (int ai = 0; ai < 8; ++ai) {
-            uintptr_t ac = mem.R<uintptr_t>(a.Data + ai * sizeof(uintptr_t));
-            if (!ac) continue;
-            std::string cn = obj_class_name(mem, ac, chunkTable);
-            if (cn.find("Actor") != std::string::npos ||
-                cn.find("Volume") != std::string::npos ||
-                cn.find("Light") != std::string::npos ||
-                cn.find("Mesh") != std::string::npos ||
-                cn.find("Level") != std::string::npos) hits++;
-        }
-        if (hits >= 2) return obj;
+        // World should have a NetDriver pointer at +0x38
+        uintptr_t nd = mem.R<uintptr_t>(obj + OFF::World_NetDriver);
+        if (!is_heap_ptr(nd)) continue;
+        uintptr_t ndVtbl = mem.R<uintptr_t>(nd);
+        if (ndVtbl < libBase || ndVtbl > libBase + 0x20000000) continue;
+        return obj;
     }
     return 0;
 }
