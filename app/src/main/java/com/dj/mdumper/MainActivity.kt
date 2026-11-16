@@ -111,11 +111,11 @@ class MainActivity : AppCompatActivity() {
             // MD7 executable accepts args; see its DUMPER_BUILD_EXECUTABLE main.
             // Usage pattern: mdumper_full -p <pid> -o <outdir>  OR  mdumper_full <pid> <outdir>
             // We try the common forms.
-            val cmd = "${full.absolutePath} -p $pid -o '${outDir.absolutePath}'"
+            val cmd = "${full.absolutePath} -p ${target.packageName} -o '${outDir.absolutePath}' -m 1"
             log("$ $cmd")
             val r = RootShell.exec(cmd, timeoutMs = 300_000) // 5 min
-            if (r.stdout.isNotBlank()) log(r.stdout.take(8000))
-            if (r.stderr.isNotBlank()) log("[stderr] ${r.stderr.take(4000)}")
+            if (r.stdout.isNotBlank()) log(r.stdout)
+            if (r.stderr.isNotBlank()) log("[stderr] ${r.stderr}")
             log("► exit=${r.exitCode}")
             // Did anything land in outDir?
             val files = outDir.walkTopDown().filter { it.isFile }.toList()
@@ -191,4 +191,4 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-object BuildConfigLite { const val VERSION_NAME = "0.4.0" }
+object BuildConfigLite { const val VERSION_NAME = "0.4.1" }
