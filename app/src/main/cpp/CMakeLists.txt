@@ -16,7 +16,7 @@ set(FORCE_INC "${CMAKE_CURRENT_SOURCE_DIR}/md7_force_includes.h")
 
 add_subdirectory("${MD7_DIR}" MobileDumper-7)
 # Add the pre-include to MD7 target so library build gets it too
-target_compile_options(MobileDumper-7 PRIVATE -include "${FORCE_INC}")
+target_compile_options(MobileDumper-7 PRIVATE "SHELL:$<$<COMPILE_LANGUAGE:CXX>:-include ${FORCE_INC}>")
 
 # ─── MD7 as standalone executable ──────────────────────────────────
 set(KITTYMEM_PATH "${MD7_DIR}/libs/KittyMemoryEx/KittyMemoryEx")
@@ -35,7 +35,7 @@ target_include_directories(mdumper_full PRIVATE "${KITTYMEM_PATH}/..")
 target_compile_definitions(mdumper_full PRIVATE
     FMT_HEADER_ONLY kNO_KEYSTONE DUMPER_BUILD_EXECUTABLE NDEBUG)
 target_compile_options(mdumper_full PRIVATE
-    -include "${FORCE_INC}"
+    "SHELL:$<$<COMPILE_LANGUAGE:CXX>:-include ${FORCE_INC}>"
     -fexceptions -fPIE
     -Wno-unused-parameter -Wno-unused-function -Wno-missing-field-initializers
     -O2 -fvisibility=hidden -fvisibility-inlines-hidden)
