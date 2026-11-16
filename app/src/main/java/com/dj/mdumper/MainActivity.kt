@@ -33,8 +33,10 @@ class MainActivity : AppCompatActivity() {
         try { log("Native: ${NativeBridge.getBuildInfo()}") }
         catch (t: Throwable) { log("Native lib not loaded: ${t.message}") }
 
-        log("Helper binary: ${helperBinary().absolutePath}")
-        log("Helper exists: ${helperBinary().exists()}")
+        log("Helper (quick): ${quickHelper().absolutePath}")
+        log("Helper (full):  ${fullHelper().absolutePath}")
+        log("Quick exists:   ${quickHelper().exists()}")
+        log("Full exists:    ${fullHelper().exists()}")
 
         checkStoragePermission()
 
@@ -48,37 +50,32 @@ class MainActivity : AppCompatActivity() {
         b.btnCheckRoot.setOnClickListener {
             lifecycleScope.launch {
                 val ok = withContext(Dispatchers.IO) { RootShell.isRootAvailable() }
-                log(if (ok) "✓ Root OK" else "✗ Root denied — grant su to this app")
+                log(if (ok) "✓ Root OK" else "✗ Root denied — grant su")
             }
         }
     }
 
-    /** The native executable extracted by APK installer into the private lib dir. */
-    private fun helperBinary(): File =
-        File(applicationInfo.nativeLibraryDir, "libmdumper_exec.so")
+    private fun quickHelper(): File = File(applicationInfo.nativeLibraryDir, "libmdumper_exec.so")
+    private fun fullHelper():  File = File(applicationInfo.nativeLibraryDir, "libmdumper_full.so")
 
     private fun checkStoragePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
             !Environment.isExternalStorageManager()) {
             AlertDialog.Builder(this)
                 .setTitle("Storage Access Needed")
-                .setMessage("MDumper writes dumps to Downloads/MDumper. Grant 'All files access' on the next screen.")
+                .setMessage("MDumper writes dumps to Downloads/MDumper.")
                 .setPositiveButton("Grant") { _, _ ->
                     startActivity(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
                         Uri.parse("package:$packageName")))
-                }
-                .setNegativeButton("Later", null)
-                .show()
+                }.setNegativeButton("Later", null).show()
         }
     }
 
     private fun pickOtherGame() {
-        val choices = GameTarget.PRESETS
-        AlertDialog.Builder(this)
-            .setTitle("Pick UE4 Game")
-            .setItems(choices.map { it.second }.toTypedArray()) { _, i ->
-                val (pkg, name) = choices[i]
-                dump(GameTarget(pkg, name, true))
+        val c = GameTarget.PRESETS
+        AlertDialog.Builder(this).setTitle("Pick UE4 Game")
+            .setItems(c.map { it.second }.toTypedArray()) { _, i ->
+                dump(GameTarget(c[i].first, c[i].second, true))
             }.show()
     }
 
@@ -86,26 +83,18 @@ class MainActivity : AppCompatActivity() {
         setBusy(true)
         b.log.text = ""
         log("► Starting dump: ${target.displayName} (${target.packageName})")
-
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) { runDump(target) }
             setBusy(false)
             if (result == null) log("✗ Dump failed — check logs above")
-            else onDumpComplete(result, target)
+            else onDumpComplete(result)
         }
     }
 
     private fun runDump(target: GameTarget): File? {
-        if (!RootShell.isRootAvailable()) {
-            log("✗ Root unavailable — grant su and retry")
-            return null
-        }
-
+        if (!RootShell.isRootAvailable()) { log("✗ Root unavailable"); return null }
         val pids = RootShell.pidsOf(target.packageName)
-        if (pids.isEmpty()) {
-            log("✗ ${target.packageName} not running — launch it first")
-            return null
-        }
+        if (pids.isEmpty()) { log("✗ ${target.packageName} not running"); return null }
         val pid = pids.first()
         log("► PID: $pid")
 
@@ -115,49 +104,54 @@ class MainActivity : AppCompatActivity() {
         outDir.mkdirs()
         log("► Output: ${outDir.absolutePath}")
 
-        // FULL dump via MobileDumper-7. Needs root; MD7 uses process_vm_readv.
-        // The APK is not root by itself; we shell out to a tiny wrapper that
-        // re-invokes our own process with CAP_SYS_PTRACE via su. Actually,
-        // since MD7 uses syscalls that require root, we exec `app_process`
-        // from a su shell with the native lib preloaded.
-        //
-        // Simplest reliable approach: use JNI dumpFull directly; KernelSU
-        // can grant root to the app UID. If su is needed, user grants it.
-        log("► Starting full SDK dump via MobileDumper-7 (may take 1-2 min)...")
-        val rc = try {
-            NativeBridge.dumpFull(pid, target.packageName, outDir.absolutePath)
-        } catch (t: Throwable) {
-            log("✗ Native crash: ${t.message}")
-            return null
-        }
-        if (rc != 0) {
-            log("✗ dumpFull rc=$rc")
-            // Fall back to quick walker as diagnostic
-            log("► Falling back to quick walker...")
-            val bin = helperBinary()
-            if (bin.exists()) {
-                val r = RootShell.exec("${bin.absolutePath} '${outDir.absolutePath}'", 60_000)
-                log(r.stdout)
-                if (r.stderr.isNotBlank()) log("[stderr] ${r.stderr}")
+        // ─── PATH 1: run MD7 as a root subprocess via `su -c libmdumper_full.so` ──
+        val full = fullHelper()
+        if (full.exists()) {
+            log("► Running full MD7 dumper via su (may take 1-2 min)...")
+            // MD7 executable accepts args; see its DUMPER_BUILD_EXECUTABLE main.
+            // Usage pattern: mdumper_full -p <pid> -o <outdir>  OR  mdumper_full <pid> <outdir>
+            // We try the common forms.
+            val cmd = "${full.absolutePath} -p $pid -o '${outDir.absolutePath}'"
+            log("$ $cmd")
+            val r = RootShell.exec(cmd, timeoutMs = 300_000) // 5 min
+            if (r.stdout.isNotBlank()) log(r.stdout.take(8000))
+            if (r.stderr.isNotBlank()) log("[stderr] ${r.stderr.take(4000)}")
+            log("► exit=${r.exitCode}")
+            // Did anything land in outDir?
+            val files = outDir.walkTopDown().filter { it.isFile }.toList()
+            log("► Files written: ${files.size}")
+            if (files.isNotEmpty()) {
+                val zipFile = File(outDir.parentFile, "${outDir.name}.zip")
+                zipDir(outDir, zipFile)
+                log("✓ Done: ${zipFile.length() / 1024}KB")
+                return zipFile
             }
-            return null
+            log("✗ Full dumper produced no output — falling back to quick walker")
+        } else {
+            log("✗ libmdumper_full.so missing — only quick walker available")
         }
 
-        // Zip output
-        log("► Zipping...")
+        // ─── PATH 2: quick walker fallback ───────────────────────────────────────
+        val quick = quickHelper()
+        if (!quick.exists()) { log("✗ No helper binaries"); return null }
+        log("► Running quick walker via su...")
+        val r = RootShell.exec("${quick.absolutePath} '${outDir.absolutePath}'", 60_000)
+        log(r.stdout)
+        if (r.stderr.isNotBlank()) log("[stderr] ${r.stderr}")
+        val files = outDir.walkTopDown().filter { it.isFile }.toList()
+        if (files.isEmpty()) return null
         val zipFile = File(outDir.parentFile, "${outDir.name}.zip")
         zipDir(outDir, zipFile)
-        log("✓ Done: ${zipFile.absolutePath} (${zipFile.length() / 1024}KB)")
+        log("✓ Done: ${zipFile.length() / 1024}KB")
         return zipFile
     }
 
-    private fun onDumpComplete(zipFile: File, target: GameTarget) {
+    private fun onDumpComplete(zipFile: File) {
         AlertDialog.Builder(this)
             .setTitle("Dump Complete")
-            .setMessage("${zipFile.name}\n\n${zipFile.length() / 1024}KB written to Downloads/MDumper/")
+            .setMessage("${zipFile.name}\n${zipFile.length() / 1024}KB")
             .setPositiveButton("Share") { _, _ -> shareFile(zipFile) }
-            .setNegativeButton("Close", null)
-            .show()
+            .setNegativeButton("Close", null).show()
     }
 
     private fun shareFile(f: File) {
@@ -197,6 +191,4 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-object BuildConfigLite {
-    const val VERSION_NAME = "0.2.0"
-}
+object BuildConfigLite { const val VERSION_NAME = "0.4.0" }
