@@ -191,4 +191,4 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-object BuildConfigLite { const val VERSION_NAME = "0.4.3" }
+object BuildConfigLite { const val VERSION_NAME = "0.4.4" }

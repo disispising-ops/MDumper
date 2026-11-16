@@ -12,8 +12,8 @@ android {
         applicationId = "com.dj.mdumper"
         minSdk = 24
         targetSdk = 34
-        versionCode = 8
-        versionName = "0.4.3"
+        versionCode = 9
+        versionName = "0.4.4"
 
         ndk { abiFilters += "arm64-v8a" }
 
