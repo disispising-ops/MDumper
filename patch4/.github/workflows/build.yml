@@ -1,0 +1,55 @@
+name: Build MDumper APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+
+      - name: Fetch MobileDumper-7 and apply patches
+        run: |
+          set -e
+          MD7_DIR=app/src/main/cpp/MobileDumper-7
+          if [ ! -f $MD7_DIR/CMakeLists.txt ]; then
+            git clone --recursive https://github.com/MJx0/MobileDumper-7.git $MD7_DIR
+          fi
+          cd $MD7_DIR
+          for p in ../../../../patches/*.patch; do
+            if [ -f "$p" ]; then
+              echo "Applying $p"
+              git apply --verbose "$p" || { echo "Patch failed: $p"; exit 1; }
+            fi
+          done
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 ndk;26.1.10909125 cmake;3.22.1'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with: { gradle-version: "8.7" }
+
+      - name: Build release APK
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MDumper-APK
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+      - name: Dump failure logs
+        if: failure()
+        run: |
+          find app/build -name "*.log" -exec echo "=== {} ===" \; -exec cat {} \; || true
+          find . -name "CMakeOutput.log" -o -name "CMakeError.log" | head -5 | xargs -r cat || true

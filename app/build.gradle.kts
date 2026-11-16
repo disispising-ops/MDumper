@@ -12,15 +12,15 @@ android {
         applicationId = "com.dj.mdumper"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.2.1"
+        versionCode = 4
+        versionName = "0.3.0"
 
         ndk { abiFilters += "arm64-v8a" }
 
         externalNativeBuild {
             cmake {
-                cppFlags += "-std=c++17"
-                arguments += "-DANDROID_STL=c++_static"
+                cppFlags += "-std=c++20"
+                arguments += "-DANDROID_STL=c++_shared"
             }
         }
     }

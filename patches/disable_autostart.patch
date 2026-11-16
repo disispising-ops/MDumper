@@ -1,0 +1,11 @@
+--- a/Dumper/main_android.cpp
++++ b/Dumper/main_android.cpp
+@@ -249,7 +249,7 @@
+ 
+ #ifndef DUMPER_BUILD_EXECUTABLE
+ 
+-#if 1
++#if 0
+ __attribute__((constructor)) static void OnLibraryLoad()
+ {
+ 	std::thread([]()

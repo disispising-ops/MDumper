@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MDumper" parent="Theme.Material3.DayNight">
+        <item name="colorPrimary">@color/md_purple</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="android:statusBarColor">?attr/colorSurface</item>
+    </style>
+</resources>

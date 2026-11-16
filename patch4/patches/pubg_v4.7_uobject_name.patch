@@ -1,0 +1,32 @@
+From: dj
+Subject: [PATCH] PUBG v4.7+: pin UObject.Name = 0x18
+
+PUBG Mobile scrambles FName.CompIdx at the stock UObject::Name slot, so
+MobileDumper-7's Init_UObject_Name heuristic (which walks 0x08..0x58 and
+scores each offset by CompIdx plausibility) can't find it. UE 4.18 ships
+UObject::Name at 0x18 on 64-bit and PUBG keeps it there — just with the
+real value encrypted. OverrideInGenOffsets runs BEFORE the scan and when
+Offsets.UObject.Name is already set, Init_UObject_Name is skipped entirely.
+
+--- a/Dumper/Profile/CustomProfiles/Shared/PUBG.h
++++ b/Dumper/Profile/CustomProfiles/Shared/PUBG.h
+@@ -58,6 +58,20 @@
+ 		}
+ 	}
+
++	// PUBG Mobile scrambles FName.CompIdx at the stock UObject::Name slot, so
++	// the comparison-index heuristic in Init_UObject_Name walks past 0x58
++	// without a hit. UE 4.18 ships UObject::Name at 0x18 on 64-bit and
++	// that's where PUBG keeps it; pin it so the generator can proceed.
++	void OverrideInGenOffsets(FInGenOffsets& Offsets) const override
++	{
++#ifdef __LP64__
++		Offsets.UObject.Name = 0x18;
++#else
++		Offsets.UObject.Name = 0x10;
++#endif
++	}
++
+ 	void OverrideDecryptCallbacks(FDecryptCallbacks& Callbacks) const override
+ 	{
+ 		Callbacks.Statics.GNames = [](const FDecryptContext<uintptr_t>& Context)

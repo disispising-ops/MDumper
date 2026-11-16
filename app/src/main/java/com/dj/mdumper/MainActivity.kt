@@ -115,20 +115,31 @@ class MainActivity : AppCompatActivity() {
         outDir.mkdirs()
         log("► Output: ${outDir.absolutePath}")
 
-        val bin = helperBinary()
-        if (!bin.exists()) {
-            log("✗ Helper binary missing: ${bin.absolutePath}")
+        // FULL dump via MobileDumper-7. Needs root; MD7 uses process_vm_readv.
+        // The APK is not root by itself; we shell out to a tiny wrapper that
+        // re-invokes our own process with CAP_SYS_PTRACE via su. Actually,
+        // since MD7 uses syscalls that require root, we exec `app_process`
+        // from a su shell with the native lib preloaded.
+        //
+        // Simplest reliable approach: use JNI dumpFull directly; KernelSU
+        // can grant root to the app UID. If su is needed, user grants it.
+        log("► Starting full SDK dump via MobileDumper-7 (may take 1-2 min)...")
+        val rc = try {
+            NativeBridge.dumpFull(pid, target.packageName, outDir.absolutePath)
+        } catch (t: Throwable) {
+            log("✗ Native crash: ${t.message}")
             return null
         }
-
-        // Run helper as root
-        val cmd = "${bin.absolutePath} '${outDir.absolutePath}'"
-        log("► Running: $cmd")
-        val r = RootShell.exec(cmd, timeoutMs = 120_000)
-        log(r.stdout)
-        if (r.stderr.isNotBlank()) log("[stderr] ${r.stderr}")
-        if (r.exitCode != 0) {
-            log("✗ Helper exit=${r.exitCode}")
+        if (rc != 0) {
+            log("✗ dumpFull rc=$rc")
+            // Fall back to quick walker as diagnostic
+            log("► Falling back to quick walker...")
+            val bin = helperBinary()
+            if (bin.exists()) {
+                val r = RootShell.exec("${bin.absolutePath} '${outDir.absolutePath}'", 60_000)
+                log(r.stdout)
+                if (r.stderr.isNotBlank()) log("[stderr] ${r.stderr}")
+            }
             return null
         }
 
