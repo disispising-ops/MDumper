@@ -30,7 +30,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(b.root)
 
         log("MDumper ${BuildConfigLite.VERSION_NAME}")
-        log("Native: ${NativeBridge.getBuildInfo()}")
+        try { log("Native: ${NativeBridge.getBuildInfo()}") }
+        catch (t: Throwable) { log("Native lib not loaded: ${t.message}") }
+
+        log("Helper binary: ${helperBinary().absolutePath}")
+        log("Helper exists: ${helperBinary().exists()}")
 
         checkStoragePermission()
 
@@ -40,9 +44,7 @@ class MainActivity : AppCompatActivity() {
         b.btnDumpBgmi.setOnClickListener {
             dump(GameTarget("com.pubg.imobile", "BGMI", true))
         }
-        b.btnDumpCustom.setOnClickListener {
-            pickOtherGame()
-        }
+        b.btnDumpCustom.setOnClickListener { pickOtherGame() }
         b.btnCheckRoot.setOnClickListener {
             lifecycleScope.launch {
                 val ok = withContext(Dispatchers.IO) { RootShell.isRootAvailable() }
@@ -50,6 +52,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+    /** The native executable extracted by APK installer into the private lib dir. */
+    private fun helperBinary(): File =
+        File(applicationInfo.nativeLibraryDir, "libmdumper_exec.so")
 
     private fun checkStoragePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
@@ -73,8 +79,7 @@ class MainActivity : AppCompatActivity() {
             .setItems(choices.map { it.second }.toTypedArray()) { _, i ->
                 val (pkg, name) = choices[i]
                 dump(GameTarget(pkg, name, true))
-            }
-            .show()
+            }.show()
     }
 
     private fun dump(target: GameTarget) {
@@ -85,14 +90,11 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) { runDump(target) }
             setBusy(false)
-            when {
-                result == null                 -> log("✗ Dump failed — check logs above")
-                else                           -> onDumpComplete(result, target)
-            }
+            if (result == null) log("✗ Dump failed — check logs above")
+            else onDumpComplete(result, target)
         }
     }
 
-    /** Returns the zip file path on success, null on failure. */
     private fun runDump(target: GameTarget): File? {
         if (!RootShell.isRootAvailable()) {
             log("✗ Root unavailable — grant su and retry")
@@ -113,21 +115,24 @@ class MainActivity : AppCompatActivity() {
         outDir.mkdirs()
         log("► Output: ${outDir.absolutePath}")
 
-        // The actual MobileDumper-7 runs here via JNI
-        val rc = try {
-            NativeBridge.dump(pid, outDir.absolutePath, target.packageName)
-        } catch (t: Throwable) {
-            log("✗ Native crash: ${t.message}")
+        val bin = helperBinary()
+        if (!bin.exists()) {
+            log("✗ Helper binary missing: ${bin.absolutePath}")
             return null
         }
 
-        // Pull native log regardless of outcome
-        log(NativeBridge.getLastLog())
-        if (rc != 0) {
-            log("✗ Dumper rc=$rc : ${NativeBridge.getLastError()}")
+        // Run helper as root
+        val cmd = "${bin.absolutePath} '${outDir.absolutePath}'"
+        log("► Running: $cmd")
+        val r = RootShell.exec(cmd, timeoutMs = 120_000)
+        log(r.stdout)
+        if (r.stderr.isNotBlank()) log("[stderr] ${r.stderr}")
+        if (r.exitCode != 0) {
+            log("✗ Helper exit=${r.exitCode}")
             return null
         }
 
+        // Zip output
         log("► Zipping...")
         val zipFile = File(outDir.parentFile, "${outDir.name}.zip")
         zipDir(outDir, zipFile)
@@ -181,7 +186,6 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-// Tiny shim so we don't have to enable buildConfig
 object BuildConfigLite {
-    const val VERSION_NAME = "0.1.0"
+    const val VERSION_NAME = "0.2.0"
 }
