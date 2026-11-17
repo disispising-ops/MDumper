@@ -15,7 +15,10 @@ jobs:
           set -e
           MD7_DIR=app/src/main/cpp/MobileDumper-7
           rm -rf $MD7_DIR
-          git clone --recursive --depth 1 https://github.com/MJx0/MobileDumper-7.git $MD7_DIR
+          # [V-mod] Use our fork which has FortniteProfile added. Upstream MJx0/MobileDumper-7
+          # only ships PUBG/DeltaForce/Valorant/NewState profiles. The fork adds Fortnite
+          # (com.epicgames.fortnite) with FChunkedUObjectArray + FNamePool layouts for UE5.
+          git clone --recursive --depth 1 https://github.com/disispising-ops/MobileDumper-7.git $MD7_DIR
           echo "MD7 files: $(find $MD7_DIR/Dumper -type f | wc -l)"
           if [ ! -f $MD7_DIR/libs/KittyMemoryEx/KittyMemoryEx/KittyMemoryMgr.cpp ]; then
             rm -rf $MD7_DIR/libs/KittyMemoryEx
