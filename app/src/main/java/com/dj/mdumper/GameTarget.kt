@@ -15,9 +15,6 @@ data class GameTarget(
             "com.pubg.krmobile"       to "PUBG Mobile KR/JP",
             "com.vng.pubgmobile"      to "PUBG Mobile (Vietnam)",
             "com.tencent.tmgp.pubgmhd" to "PUBG Mobile HD (CN)",
-            // [V-mod] Fortnite via the FortniteProfile in disispising-ops/MobileDumper-7
-            "com.epicgames.fortnite"      to "Fortnite",
-            "com.epicgames.fortnitemobile" to "Fortnite Mobile (alt pkg)",
         )
     }
 }
