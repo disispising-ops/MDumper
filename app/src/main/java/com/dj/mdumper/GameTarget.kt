@@ -15,10 +15,8 @@ data class GameTarget(
             "com.pubg.krmobile"       to "PUBG Mobile KR/JP",
             "com.vng.pubgmobile"      to "PUBG Mobile (Vietnam)",
             "com.tencent.tmgp.pubgmhd" to "PUBG Mobile HD (CN)",
-            // [V-mod] Farlight 84 — Lilith Games UE4 BR
-            "com.farlightgames.igame.gp" to "Farlight 84 (Google Play)",
-            "com.farlightgames.igame"    to "Farlight 84 (generic)",
-            "com.farlightgames.igame.cn" to "Farlight 84 (CN)",
+            // [V-mod] Farlight 84 — Miracle Games (Lilith) UE4 BR
+            "com.miraclegames.farlight84" to "Farlight 84",
         )
     }
 }
